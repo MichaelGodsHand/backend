@@ -462,11 +462,24 @@ async def send_transaction_context_to_blockscout(ctx: Context, conversation_id: 
         )
         
         # Send to BlockscoutAgent
-        await ctx.send(BLOCKSCOUT_AGENT_ADDRESS, tx_context)
-        ctx.logger.info(f"Sent transaction context to BlockscoutAgent: {tx_info['tx_hash']}")
+        ctx.logger.info(f"Attempting to send A2A message to BlockscoutAgent address: {BLOCKSCOUT_AGENT_ADDRESS}")
+        ctx.logger.info(f"Transaction context data: {tx_context}")
+        
+        try:
+            await ctx.send(BLOCKSCOUT_AGENT_ADDRESS, tx_context)
+            ctx.logger.info(f"Successfully sent transaction context to BlockscoutAgent: {tx_info['tx_hash']}")
+        except Exception as a2a_error:
+            ctx.logger.error(f"A2A send failed: {a2a_error}")
+            ctx.logger.error(f"A2A error type: {type(a2a_error).__name__}")
+            import traceback
+            ctx.logger.error(f"A2A traceback: {traceback.format_exc()}")
+            raise a2a_error
         
     except Exception as e:
         ctx.logger.error(f"Failed to send transaction context to BlockscoutAgent: {e}")
+        ctx.logger.error(f"Error type: {type(e).__name__}")
+        import traceback
+        ctx.logger.error(f"Traceback: {traceback.format_exc()}")
 
 
 async def get_transaction_analysis_from_blockscout(tx_hash: str) -> Optional[Dict[str, Any]]:
