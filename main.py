@@ -425,7 +425,7 @@ class MessageData(Model):
 
 class PersonalityMessageRequest(Model):
     personality: Dict[str, str]
-    previous_messages: List[Dict[str, str]]
+    previous_messages: List[Dict[str, Any]]  # Changed from Dict[str, str] to allow transaction_analysis
     is_initial: bool
     agent_description: str
 
