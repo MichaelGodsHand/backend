@@ -93,9 +93,20 @@ class ConversationKnowledgeGraph:
         if chain_id:
             self.metta.space().add_atom(E(S("transaction_chain"), S(tx_id), ValueAtom(chain_id)))
         
-        # Link transaction to conversation
+        # Link transaction to conversation (both directions)
         self.metta.space().add_atom(E(S("transaction_conversation"), S(tx_id), S(conv_id)))
         self.metta.space().add_atom(E(S("conversation_transaction"), S(conv_id), S(tx_id)))
+        
+        # Also store the transaction data directly in the conversation for easier retrieval
+        tx_data = {
+            "transaction_hash": transaction_hash,
+            "chain_id": chain_id,
+            "analysis": analysis,
+            "timestamp": timestamp,
+            "success": True
+        }
+        tx_data_json = json.dumps(tx_data)
+        self.metta.space().add_atom(E(S("conversation_tx_data"), S(conv_id), ValueAtom(tx_data_json)))
         
         return f"Successfully added BlockScout analysis for transaction: {transaction_hash}"
     
@@ -139,17 +150,32 @@ class ConversationKnowledgeGraph:
             eval_json = eval_results[0][0].get_object().value
             result['evaluation'] = json.loads(eval_json)
         
-        # Get associated transactions
-        query_str = f'!(match &self (conversation_transaction {conv_id} $tx) $tx)'
-        tx_results = self.metta.run(query_str)
+        # Get associated transactions - try direct storage first
+        query_str = f'!(match &self (conversation_tx_data {conv_id} $tx_data) $tx_data)'
+        tx_data_results = self.metta.run(query_str)
         transactions = []
-        if tx_results:
-            for tx_result in tx_results:
-                if tx_result and len(tx_result) > 0:
-                    tx_id = str(tx_result[0])
-                    tx_data = self.query_transaction_by_id(tx_id)
-                    if tx_data:
+        
+        if tx_data_results:
+            for tx_data_result in tx_data_results:
+                if tx_data_result and len(tx_data_result) > 0:
+                    tx_data_json = tx_data_result[0].get_object().value
+                    try:
+                        tx_data = json.loads(tx_data_json)
                         transactions.append(tx_data)
+                    except json.JSONDecodeError:
+                        continue
+        
+        # If no direct data found, try the old method
+        if not transactions:
+            query_str = f'!(match &self (conversation_transaction {conv_id} $tx) $tx)'
+            tx_results = self.metta.run(query_str)
+            if tx_results:
+                for tx_result in tx_results:
+                    if tx_result and len(tx_result) > 0:
+                        tx_id = str(tx_result[0])
+                        tx_data = self.query_transaction_by_id(tx_id)
+                        if tx_data:
+                            transactions.append(tx_data)
         
         result['transactions'] = transactions
         
@@ -1318,7 +1344,23 @@ def enhance_conversation_with_transactions(conversation: Dict[str, Any], all_tra
     # Get existing transactions from conversation
     existing_transactions = conversation.get('transactions', [])
     
-    # Enhance each transaction with complete analysis data
+    # If transactions are already complete (have analysis), use them as-is
+    if existing_transactions and any(tx.get('analysis') for tx in existing_transactions):
+        # Transactions already have complete data, just ensure format is consistent
+        enhanced_transactions = []
+        for tx in existing_transactions:
+            enhanced_tx = {
+                "transaction_hash": tx.get('transaction_hash', ''),
+                "chain_id": tx.get('chain_id', '84532'),
+                "analysis": tx.get('analysis', ''),
+                "timestamp": tx.get('timestamp', ''),
+                "success": tx.get('success', True)
+            }
+            enhanced_transactions.append(enhanced_tx)
+        enhanced_conv['transactions'] = enhanced_transactions
+        return enhanced_conv
+    
+    # Otherwise, try to enhance with data from all_transactions
     enhanced_transactions = []
     for tx in existing_transactions:
         tx_hash = tx.get('transaction_hash', '')
