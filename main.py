@@ -983,35 +983,73 @@ async def handle_transaction_analysis_response(ctx: Context, sender: str, msg: T
 
 @agent.on_rest_post("/rest/store-conversation", ConversationStorageRequest, ConversationStorageResponse)
 async def handle_store_conversation(ctx: Context, req: ConversationStorageRequest) -> ConversationStorageResponse:
-    """Store a conversation for later analysis"""
-    ctx.logger.info(f"Storing conversation: {req.conversation_id}")
+    """Store a conversation for later analysis - now extracts and stores transaction data from messages"""
+    ctx.logger.info(f"[STORE-CONV] Storing conversation: {req.conversation_id}")
+    ctx.logger.info(f"[STORE-CONV] Personality: {req.personality_name}")
+    ctx.logger.info(f"[STORE-CONV] Number of messages: {len(req.messages)}")
     
     try:
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         filename = f"conversation_{req.conversation_id}_{timestamp}.json"
         filepath = STORAGE_DIR / filename
         
+        # Extract transaction analyses from messages
+        transactions_in_conversation = []
+        for msg in req.messages:
+            # Check if message has transaction_analysis field
+            if isinstance(msg, dict) and 'transaction_analysis' in msg:
+                tx_analysis = msg['transaction_analysis']
+                ctx.logger.info(f"[STORE-CONV] Found transaction analysis in message: {tx_analysis.get('transaction_hash', 'unknown')}")
+                transactions_in_conversation.append({
+                    "transaction_hash": tx_analysis.get('transaction_hash', ''),
+                    "chain_id": tx_analysis.get('chain', '84532'),
+                    "analysis": tx_analysis.get('analysis', ''),
+                    "timestamp": tx_analysis.get('timestamp', ''),
+                    "success": True
+                })
+        
+        ctx.logger.info(f"[STORE-CONV] Extracted {len(transactions_in_conversation)} transactions from messages")
+        
         data = {
             "conversation_id": req.conversation_id,
             "personality_name": req.personality_name,
             "messages": req.messages,
+            "transactions": transactions_in_conversation,
             "stored_at": datetime.utcnow().isoformat()
         }
         
         with open(filepath, 'w') as f:
             json.dump(data, f, indent=2)
         
-        # Store in Knowledge Graph
+        ctx.logger.info(f"[STORE-CONV] Saved to file: {filepath}")
+        
+        # Store in Knowledge Graph with transactions
         try:
+            ctx.logger.info(f"[STORE-CONV] Storing conversation in KG...")
             kg_result = conversation_kg.add_conversation(
                 conversation_id=req.conversation_id,
                 personality_name=req.personality_name,
                 messages=req.messages,
                 timestamp=datetime.utcnow().isoformat()
             )
-            ctx.logger.info(f"Knowledge Graph storage: {kg_result}")
+            ctx.logger.info(f"[STORE-CONV] KG conversation storage: {kg_result}")
+            
+            # Store each transaction in KG
+            for tx_data in transactions_in_conversation:
+                ctx.logger.info(f"[STORE-CONV] Storing transaction in KG: {tx_data['transaction_hash']}")
+                tx_kg_result = conversation_kg.add_blockscout_analysis(
+                    transaction_hash=tx_data['transaction_hash'],
+                    conversation_id=req.conversation_id,
+                    analysis=tx_data['analysis'],
+                    timestamp=tx_data['timestamp'],
+                    chain_id=tx_data['chain_id']
+                )
+                ctx.logger.info(f"[STORE-CONV] KG transaction storage: {tx_kg_result}")
+                
         except Exception as kg_error:
-            ctx.logger.warning(f"KG storage failed but file saved: {kg_error}")
+            ctx.logger.warning(f"[STORE-CONV] KG storage failed but file saved: {kg_error}")
+            import traceback
+            ctx.logger.warning(f"[STORE-CONV] Traceback: {traceback.format_exc()}")
         
         return ConversationStorageResponse(
             success=True,
@@ -1020,7 +1058,9 @@ async def handle_store_conversation(ctx: Context, req: ConversationStorageReques
         )
         
     except Exception as e:
-        ctx.logger.error(f"Failed to store conversation: {str(e)}")
+        ctx.logger.error(f"[STORE-CONV] Failed to store conversation: {str(e)}")
+        import traceback
+        ctx.logger.error(f"[STORE-CONV] Traceback: {traceback.format_exc()}")
         return ConversationStorageResponse(
             success=False,
             filepath="",
