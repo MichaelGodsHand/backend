@@ -82,8 +82,18 @@ class ConversationKnowledgeGraph:
     def add_blockscout_analysis(self, transaction_hash: str, conversation_id: str, 
                                analysis: str, timestamp: str, chain_id: str = ""):
         """Add BlockScout analysis linked to a conversation."""
+        print(f"[KG] add_blockscout_analysis called with:")
+        print(f"[KG]   - transaction_hash: {transaction_hash}")
+        print(f"[KG]   - conversation_id: {conversation_id}")
+        print(f"[KG]   - chain_id: {chain_id}")
+        print(f"[KG]   - timestamp: {timestamp}")
+        print(f"[KG]   - analysis length: {len(analysis)}")
+        
         tx_id = transaction_hash.lower().replace("0x", "tx_")
         conv_id = conversation_id.replace("-", "_")
+        
+        print(f"[KG]   - tx_id: {tx_id}")
+        print(f"[KG]   - conv_id: {conv_id}")
         
         # Store transaction analysis
         self.metta.space().add_atom(E(S("transaction_hash"), S(tx_id), ValueAtom(transaction_hash)))
@@ -92,10 +102,12 @@ class ConversationKnowledgeGraph:
         
         if chain_id:
             self.metta.space().add_atom(E(S("transaction_chain"), S(tx_id), ValueAtom(chain_id)))
+            print(f"[KG] Stored chain_id: {chain_id}")
         
         # Link transaction to conversation (both directions)
         self.metta.space().add_atom(E(S("transaction_conversation"), S(tx_id), S(conv_id)))
         self.metta.space().add_atom(E(S("conversation_transaction"), S(conv_id), S(tx_id)))
+        print(f"[KG] Created bidirectional links between tx and conversation")
         
         # Also store the transaction data directly in the conversation for easier retrieval
         tx_data = {
@@ -107,21 +119,29 @@ class ConversationKnowledgeGraph:
         }
         tx_data_json = json.dumps(tx_data)
         self.metta.space().add_atom(E(S("conversation_tx_data"), S(conv_id), ValueAtom(tx_data_json)))
+        print(f"[KG] Stored direct tx_data for conversation: {conv_id}")
+        print(f"[KG] Transaction data stored successfully")
         
         return f"Successfully added BlockScout analysis for transaction: {transaction_hash}"
     
     def query_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Query a specific conversation by ID."""
+        print(f"[KG] query_conversation called for: {conversation_id}")
         conv_id = conversation_id.replace("-", "_")
+        print(f"[KG] Converted conv_id: {conv_id}")
         
         result = {}
         
         # Get conversation ID
         query_str = f'!(match &self (conversation_id {conv_id} $id) $id)'
+        print(f"[KG] Running query: {query_str}")
         conv_results = self.metta.run(query_str)
+        print(f"[KG] Conversation ID query results: {conv_results}")
         if conv_results and conv_results[0]:
             result['conversation_id'] = conv_results[0][0].get_object().value
+            print(f"[KG] Found conversation_id: {result['conversation_id']}")
         else:
+            print(f"[KG] No conversation found with ID: {conversation_id}")
             return None
         
         # Get personality
@@ -151,32 +171,53 @@ class ConversationKnowledgeGraph:
             result['evaluation'] = json.loads(eval_json)
         
         # Get associated transactions - try direct storage first
+        print(f"[KG] Querying for transactions...")
         query_str = f'!(match &self (conversation_tx_data {conv_id} $tx_data) $tx_data)'
+        print(f"[KG] Running tx_data query: {query_str}")
         tx_data_results = self.metta.run(query_str)
+        print(f"[KG] Direct tx_data query results: {tx_data_results}")
+        print(f"[KG] Number of tx_data results: {len(tx_data_results) if tx_data_results else 0}")
         transactions = []
         
         if tx_data_results:
-            for tx_data_result in tx_data_results:
+            print(f"[KG] Processing {len(tx_data_results)} tx_data results")
+            for i, tx_data_result in enumerate(tx_data_results):
+                print(f"[KG] Processing tx_data result {i}: {tx_data_result}")
                 if tx_data_result and len(tx_data_result) > 0:
                     tx_data_json = tx_data_result[0].get_object().value
+                    print(f"[KG] Extracted tx_data_json: {tx_data_json[:200]}...")
                     try:
                         tx_data = json.loads(tx_data_json)
                         transactions.append(tx_data)
-                    except json.JSONDecodeError:
+                        print(f"[KG] Successfully parsed and added tx_data: {tx_data.get('transaction_hash')}")
+                    except json.JSONDecodeError as e:
+                        print(f"[KG] Failed to parse tx_data JSON: {e}")
                         continue
+        else:
+            print(f"[KG] No direct tx_data found, trying old method...")
         
         # If no direct data found, try the old method
         if not transactions:
             query_str = f'!(match &self (conversation_transaction {conv_id} $tx) $tx)'
+            print(f"[KG] Running old method query: {query_str}")
             tx_results = self.metta.run(query_str)
+            print(f"[KG] Old method tx_results: {tx_results}")
+            print(f"[KG] Number of old method results: {len(tx_results) if tx_results else 0}")
+            
             if tx_results:
-                for tx_result in tx_results:
+                for i, tx_result in enumerate(tx_results):
+                    print(f"[KG] Processing old method result {i}: {tx_result}")
                     if tx_result and len(tx_result) > 0:
                         tx_id = str(tx_result[0])
+                        print(f"[KG] Extracted tx_id: {tx_id}")
                         tx_data = self.query_transaction_by_id(tx_id)
                         if tx_data:
                             transactions.append(tx_data)
+                            print(f"[KG] Added tx_data from old method: {tx_data.get('transaction_hash')}")
+                        else:
+                            print(f"[KG] query_transaction_by_id returned None for {tx_id}")
         
+        print(f"[KG] Final transactions count: {len(transactions)}")
         result['transactions'] = transactions
         
         return result
@@ -901,8 +942,12 @@ Return ONLY the JSON. No markdown, no explanations."""
 @agent.on_message(model=TransactionAnalysisResponse)
 async def handle_transaction_analysis_response(ctx: Context, sender: str, msg: TransactionAnalysisResponse):
     """Handle transaction analysis response from BlockscoutAgent."""
-    ctx.logger.info(f"Received transaction analysis from BlockscoutAgent for tx: {msg.transaction_hash}")
-    ctx.logger.info(f"Analysis: {msg.analysis[:200]}...")  # Log first 200 chars
+    ctx.logger.info(f"[A2A] Received transaction analysis from BlockscoutAgent for tx: {msg.transaction_hash}")
+    ctx.logger.info(f"[A2A] Conversation ID: {msg.conversation_id}")
+    ctx.logger.info(f"[A2A] Timestamp: {msg.timestamp}")
+    ctx.logger.info(f"[A2A] Success: {msg.success}")
+    ctx.logger.info(f"[A2A] Analysis length: {len(msg.analysis)}")
+    ctx.logger.info(f"[A2A] Analysis preview: {msg.analysis[:200]}...")
     
     # Store the analysis for SDK retrieval
     transaction_analyses[msg.transaction_hash] = {
@@ -912,20 +957,28 @@ async def handle_transaction_analysis_response(ctx: Context, sender: str, msg: T
         "success": msg.success
     }
     
-    ctx.logger.info(f"Stored analysis for transaction: {msg.transaction_hash}")
+    ctx.logger.info(f"[A2A] Stored analysis in transaction_analyses dict for tx: {msg.transaction_hash}")
+    ctx.logger.info(f"[A2A] transaction_analyses now contains {len(transaction_analyses)} entries")
     
     # Store in Knowledge Graph
     try:
+        ctx.logger.info(f"[A2A] Attempting to store in Knowledge Graph...")
+        ctx.logger.info(f"[A2A] KG params: tx_hash={msg.transaction_hash}, conv_id={msg.conversation_id}")
+        
         kg_result = conversation_kg.add_blockscout_analysis(
             transaction_hash=msg.transaction_hash,
             conversation_id=msg.conversation_id,
             analysis=msg.analysis,
             timestamp=msg.timestamp,
-            chain_id=""  # Chain ID is not in the response, but we can add it if needed
+            chain_id="84532"  # Default to Base Sepolia
         )
-        ctx.logger.info(f"Knowledge Graph BlockScout storage: {kg_result}")
+        ctx.logger.info(f"[A2A] Knowledge Graph BlockScout storage result: {kg_result}")
+        ctx.logger.info(f"[A2A] Successfully stored transaction analysis in KG")
     except Exception as kg_error:
-        ctx.logger.warning(f"KG BlockScout storage failed: {kg_error}")
+        ctx.logger.error(f"[A2A] KG BlockScout storage failed: {kg_error}")
+        ctx.logger.error(f"[A2A] Exception type: {type(kg_error).__name__}")
+        import traceback
+        ctx.logger.error(f"[A2A] Traceback: {traceback.format_exc()}")
 
 
 @agent.on_rest_post("/rest/store-conversation", ConversationStorageRequest, ConversationStorageResponse)
@@ -1241,12 +1294,17 @@ class KGLastEntryResponse(Model):
 @agent.on_rest_get("/rest/kg/last-entry", KGLastEntryResponse)
 async def handle_kg_last_entry(ctx: Context) -> KGLastEntryResponse:
     """Get the last inserted entry from the Knowledge Graph with complete transaction analysis data"""
-    ctx.logger.info("KG Query: Retrieving last inserted entry with transaction analysis")
+    ctx.logger.info("[LAST-ENTRY] Retrieving last inserted entry with transaction analysis")
     
     try:
         # Get all conversations and transactions, then find the most recent
+        ctx.logger.info("[LAST-ENTRY] Fetching all conversations...")
         conversations = conversation_kg.get_all_conversations()
+        ctx.logger.info(f"[LAST-ENTRY] Found {len(conversations)} conversations")
+        
+        ctx.logger.info("[LAST-ENTRY] Fetching all transactions...")
         transactions = conversation_kg.get_all_transactions()
+        ctx.logger.info(f"[LAST-ENTRY] Found {len(transactions)} transactions")
         
         # Find the most recent entry by timestamp
         last_conversation = None
