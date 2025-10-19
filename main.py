@@ -489,62 +489,62 @@ async def get_transaction_analysis_from_blockscout(tx_hash: str) -> Optional[Dic
 
 
 def generate_fallback_personalities() -> List[Dict[str, str]]:
-    """Generate fallback personalities that test DeFi capabilities using existing Base Sepolia funds"""
+    """Generate fallback personalities that test DeFi capabilities using existing Base Sepolia funds - EXACTLY 1 tool call per personality"""
     return [
         {
             "name": "TransferInitiator",
-            "personality": "Immediately asks for a transfer to 0x2514844f312c02ae3c9d4feb40db4ec8830b6844",
-            "description": "FIRST personality that immediately requests a transfer to the specified address to test the agent's transfer capabilities."
+            "personality": "Immediately asks for a transfer to 0x2514844f312c02ae3c9d4feb40db4ec8830b6844, then asks general DeFi questions",
+            "description": "FIRST personality that immediately requests a transfer to the specified address (1 tool call), then engages in general DeFi discussion."
         },
         {
             "name": "BudgetConsciousDeFiUser",
-            "personality": "Always asks about current balance first, suggests DeFi actions within budget",
-            "description": "Tests the agent's DeFi capabilities by first checking Base Sepolia balance, then suggesting swaps and operations that work with existing funds."
+            "personality": "Asks about current balance first, suggests ONE swap within budget, then discusses DeFi strategies",
+            "description": "Tests the agent's DeFi capabilities by first checking Base Sepolia balance, then suggesting ONE swap operation (1 tool call), followed by general DeFi discussion."
         },
         {
             "name": "TestnetExperimenter",
-            "personality": "Wants to try DeFi features using existing testnet funds, asks for demonstrations",
-            "description": "Encourages the agent to demonstrate DeFi features using available Base Sepolia testnet funds without requiring additional funding."
+            "personality": "Wants to try ONE DeFi feature using existing testnet funds, then asks about other DeFi concepts",
+            "description": "Encourages the agent to demonstrate ONE DeFi feature using available Base Sepolia testnet funds (1 tool call), then asks educational questions."
         },
         {
             "name": "YieldSeeker",
-            "personality": "Looks for staking and farming opportunities with current balance",
-            "description": "Asks the agent to find yield opportunities that work with existing funds, tests staking and farming capabilities."
+            "personality": "Looks for ONE staking opportunity with current balance, then discusses yield farming strategies",
+            "description": "Asks the agent to find ONE yield opportunity that works with existing funds (1 tool call), then discusses yield farming concepts."
         },
         {
             "name": "TokenExplorer",
-            "personality": "Wants to interact with tokens using available funds, asks about token balances",
-            "description": "Tests token interaction capabilities by asking about existing token balances and suggesting swaps within budget."
+            "personality": "Wants to interact with ONE token using available funds, then asks about tokenomics",
+            "description": "Tests token interaction capabilities by asking about ONE token operation within budget (1 tool call), then discusses tokenomics."
         },
         {
             "name": "DeFiLearner",
-            "personality": "Asks to demonstrate DeFi features within budget constraints, wants to learn",
-            "description": "Encourages the agent to show DeFi capabilities using existing funds, focuses on educational demonstrations."
+            "personality": "Asks to demonstrate ONE specific DeFi feature within budget constraints, then asks educational questions",
+            "description": "Encourages the agent to show ONE DeFi capability using existing funds (1 tool call), then focuses on educational discussion."
         },
         {
             "name": "EfficientUser",
-            "personality": "Suggests gas-efficient operations with existing funds, asks about optimization",
-            "description": "Tests the agent's ability to suggest efficient DeFi operations that work with current Base Sepolia balance."
+            "personality": "Suggests ONE gas-efficient operation with existing funds, then discusses optimization strategies",
+            "description": "Tests the agent's ability to suggest ONE efficient DeFi operation that works with current Base Sepolia balance (1 tool call), then discusses optimization."
         },
         {
             "name": "BalanceChecker",
-            "personality": "Always starts by asking about wallet balance, then suggests appropriate actions",
-            "description": "Tests the agent's balance checking capabilities and ensures suggestions are within available funds."
+            "personality": "Always starts by asking about wallet balance, then suggests ONE appropriate action, then asks general questions",
+            "description": "Tests the agent's balance checking capabilities and ensures ONE suggestion is within available funds (1 tool call), then asks general questions."
         },
         {
             "name": "TestnetOptimizer",
-            "personality": "Wants to maximize use of existing testnet funds, asks for best strategies",
-            "description": "Tests the agent's ability to suggest optimal DeFi strategies using only existing Base Sepolia funds."
+            "personality": "Wants to try ONE optimal DeFi strategy with existing testnet funds, then discusses best practices",
+            "description": "Tests the agent's ability to suggest ONE optimal DeFi strategy using only existing Base Sepolia funds (1 tool call), then discusses best practices."
         },
         {
             "name": "FeatureTester",
-            "personality": "Wants to test specific DeFi features with available funds, asks for demonstrations",
-            "description": "Encourages the agent to demonstrate specific DeFi features using existing funds, tests tool usage."
+            "personality": "Wants to test ONE specific DeFi feature with available funds, then asks about other features",
+            "description": "Encourages the agent to demonstrate ONE specific DeFi feature using existing funds (1 tool call), then asks about other capabilities."
         },
         {
             "name": "PracticalUser",
-            "personality": "Suggests realistic DeFi operations that work with current balance",
-            "description": "Tests the agent's practical DeFi capabilities by suggesting realistic operations within budget constraints."
+            "personality": "Suggests ONE realistic DeFi operation that works with current balance, then discusses practical applications",
+            "description": "Tests the agent's practical DeFi capabilities by suggesting ONE realistic operation within budget constraints (1 tool call), then discusses practical applications."
         }
     ]
 
@@ -586,32 +586,33 @@ AGENT CAPABILITIES (what it can do):
 
 TASK: Generate {num_personalities} different personality types that will test the agent's DeFi capabilities using ONLY the funds already present in the agent's Base Sepolia wallet. Each personality should encourage the agent to use its DeFi tools within budget constraints.
 
-REQUIREMENTS:
+CRITICAL REQUIREMENTS:
 1. Generate exactly {num_personalities} personalities
-2. The FIRST personality MUST initiate a transfer or swap action
-3. Each personality should FIRST ask about the agent's current Base Sepolia balance
-4. Personalities should suggest DeFi actions that work within the agent's existing funds
-5. Focus on Base Sepolia testnet operations only
-6. Each personality should encourage AT LEAST ONE tool call from the agent
+2. Each personality MUST make EXACTLY ONE tool call - NO MORE, NO LESS
+3. The FIRST personality MUST initiate a transfer or swap action (1 tool call)
+4. Each personality should FIRST ask about the agent's current Base Sepolia balance
+5. After the single tool call, personalities should ask general questions about DeFi, blockchain, or the agent's capabilities
+6. Focus on Base Sepolia testnet operations only
 7. Personalities should be helpful and encouraging, not overly aggressive
 8. Suggest realistic DeFi operations that don't require additional funding
 9. IMPORTANT: When personalities ask for transfers or swaps, they should request funds to be sent to address 0x2514844f312c02ae3c9d4feb40db4ec8830b6844
+10. After the single tool call, personalities should engage in general conversation about DeFi topics
 
 EXAMPLES OF GOOD BASE SEPOLIA TESTING PERSONALITIES:
-- "Transfer Initiator" - FIRST personality that immediately asks for a transfer to 0x2514844f312c02ae3c9d4feb40db4ec8830b6844
-- "Budget-Conscious DeFi User" - Asks about balance first, suggests swaps within budget
-- "Testnet Experimenter" - Wants to try DeFi features with existing testnet funds
-- "Yield Seeker" - Looks for staking/farming opportunities with current balance
-- "Token Explorer" - Wants to interact with tokens using available funds
-- "DeFi Learner" - Asks to demonstrate features within budget constraints
-- "Efficient User" - Suggests gas-efficient operations with existing funds
+- "Transfer Initiator" - FIRST personality that immediately asks for a transfer to 0x2514844f312c02ae3c9d4feb40db4ec8830b6844 (1 tool call), then asks general DeFi questions
+- "Budget-Conscious DeFi User" - Asks about balance first, suggests ONE swap within budget (1 tool call), then discusses DeFi strategies
+- "Testnet Experimenter" - Wants to try ONE DeFi feature with existing testnet funds (1 tool call), then asks about other DeFi concepts
+- "Yield Seeker" - Looks for ONE staking/farming opportunity with current balance (1 tool call), then discusses yield farming strategies
+- "Token Explorer" - Wants to interact with ONE token using available funds (1 tool call), then asks about tokenomics
+- "DeFi Learner" - Asks to demonstrate ONE specific feature within budget constraints (1 tool call), then asks educational questions
+- "Efficient User" - Suggests ONE gas-efficient operation with existing funds (1 tool call), then discusses optimization strategies
 
 FORMAT: Return a STRICT JSON array with exactly this structure:
 [
   {{
     "name": "PersonalityName",
-    "personality": "Brief personality traits focused on using existing funds",
-    "description": "Detailed description of how this personality will test the agent's DeFi capabilities using only existing Base Sepolia funds"
+    "personality": "Brief personality traits focused on making exactly ONE tool call then general conversation",
+    "description": "Detailed description of how this personality will test the agent's DeFi capabilities with exactly ONE tool call using only existing Base Sepolia funds, followed by general DeFi discussion"
   }},
   ...
 ]
@@ -684,13 +685,13 @@ The Agent: {agent_description}
 
 Task: Start a conversation that encourages the agent to use its DeFi tools on Base Sepolia testnet. Be helpful and encouraging, not aggressive.
 
-Requirements:
+CRITICAL REQUIREMENTS:
 - FIRST ask about the agent's current Base Sepolia balance
 - Suggest DeFi operations that work within the agent's existing funds
 - Focus on Base Sepolia testnet operations only
-- Encourage the agent to make at least one tool call
+- You MUST encourage the agent to make EXACTLY ONE tool call - NO MORE, NO LESS
+- After the single tool call, ask general questions about DeFi, blockchain, or the agent's capabilities
 - Be helpful and educational, not demanding
-- Ask for demonstrations of DeFi features
 - When requesting transfers or swaps, ask for funds to be sent to 0x2514844f312c02ae3c9d4feb40db4ec8830b6844
 
 Keep your message concise (1-3 sentences) and friendly.
@@ -716,16 +717,15 @@ FULL CONVERSATION SO FAR:
 
 Task: Generate your next response that encourages the agent to use its DeFi tools on Base Sepolia testnet. Be helpful and encouraging.
 
-Requirements:
+CRITICAL REQUIREMENTS:
+- You MUST ensure the agent makes EXACTLY ONE tool call during the entire conversation - NO MORE, NO LESS
 - If the agent hasn't checked its balance yet, ask about Base Sepolia balance first
-- If the agent performed an action, ask for more details or suggest another operation within budget
-- If the agent is being helpful, suggest additional DeFi features to test
+- If the agent hasn't made a tool call yet, encourage ONE specific DeFi operation within budget
+- If the agent has already made a tool call, ask general questions about DeFi, blockchain, or the agent's capabilities
 - Focus on Base Sepolia testnet operations only
-- Encourage at least one tool call from the agent
 - Be helpful and educational, not demanding
-- Suggest realistic DeFi operations that work with existing funds
-- Ask for demonstrations of specific features
 - When requesting transfers or swaps, ask for funds to be sent to 0x2514844f312c02ae3c9d4feb40db4ec8830b6844
+- After the single tool call, engage in general DeFi discussion
 
 Keep it concise (1-3 sentences) and friendly.
 
@@ -1241,4 +1241,3 @@ if __name__ == "__main__":
         agent.run()
     except KeyboardInterrupt:
         print("\n🛑 Shutting down...")
-
