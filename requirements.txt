@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-dotenv
+requests
+pydantic
+httpx
+hyperon
+
+# Optional: uAgents for Agentverse registration
+# Uncomment to enable uAgents integration
+uagents
+uagents-core
