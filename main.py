@@ -788,9 +788,12 @@ Your opening message:"""
                 role_label = "You" if msg.get('role') == 'user' else "Agent"
                 content = msg.get('content', '')
                 
-                # Skip transaction_analysis field to avoid token overflow
-                if isinstance(msg, dict) and 'transaction_analysis' in msg:
-                    # Don't include the full transaction analysis in prompt
+                # Skip if this is ONLY a transaction_analysis message (no actual content)
+                if not content or not content.strip():
+                    continue
+                
+                # Skip if the message content is just a transaction analysis header
+                if content.startswith("[Transaction Analysis"):
                     continue
                 
                 # Truncate very long messages (keep first 300 chars)
