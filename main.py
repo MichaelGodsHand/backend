@@ -782,11 +782,21 @@ Keep your message concise (1-3 sentences) and friendly.
 
 Your opening message:"""
         else:
-            # Generate follow-up with FULL conversation context
+            # Generate follow-up with FULL conversation context (but truncate long messages)
             conversation_history = []
             for msg in previous_messages:
                 role_label = "You" if msg.get('role') == 'user' else "Agent"
                 content = msg.get('content', '')
+                
+                # Skip transaction_analysis field to avoid token overflow
+                if isinstance(msg, dict) and 'transaction_analysis' in msg:
+                    # Don't include the full transaction analysis in prompt
+                    continue
+                
+                # Truncate very long messages (keep first 300 chars)
+                if len(content) > 300:
+                    content = content[:300] + "..."
+                
                 conversation_history.append(f"{role_label}: {content}")
             
             full_context = "\n\n".join(conversation_history)
