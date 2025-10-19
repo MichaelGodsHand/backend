@@ -337,20 +337,64 @@ class LLM:
                 "max_tokens": 500
             }
             
+            # DETAILED LOGGING
+            print("\n" + "="*80)
+            print("🔍 LLM API CALL - DETAILED DEBUG")
+            print("="*80)
+            print(f"📍 Endpoint: {self.base_url}/chat/completions")
+            print(f"📊 Model: {payload['model']}")
+            print(f"🌡️  Temperature: {payload['temperature']}")
+            print(f"📏 Max Tokens: {payload['max_tokens']}")
+            print(f"📝 Prompt Length: {len(prompt)} characters")
+            print(f"📝 Prompt Preview (first 500 chars):")
+            print("-" * 80)
+            print(prompt[:500])
+            print("-" * 80)
+            if len(prompt) > 500:
+                print(f"... (truncated, {len(prompt) - 500} more characters)")
+            print("\n🔑 Headers:")
+            print(f"   Authorization: Bearer {self.api_key[:20]}...{self.api_key[-10:]}")
+            print(f"   Content-Type: application/json")
+            print("\n📤 Sending request...")
+            
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=self.headers,
                 json=payload,
-                timeout=30
+                timeout=3000
             )
             
+            print(f"\n📥 Response Status: {response.status_code}")
+            print(f"📥 Response Headers: {dict(response.headers)}")
+            
             if response.status_code != 200:
+                print(f"\n❌ ERROR RESPONSE:")
+                print(f"   Status Code: {response.status_code}")
+                print(f"   Response Text: {response.text}")
+                print(f"   Response Content: {response.content}")
+                try:
+                    error_json = response.json()
+                    print(f"   Response JSON: {json.dumps(error_json, indent=2)}")
+                except:
+                    print(f"   (Could not parse as JSON)")
+                print("="*80 + "\n")
                 raise Exception(f"ASI:One API error: {response.status_code} - {response.text}")
             
             response_data = response.json()
+            print(f"\n✅ SUCCESS!")
+            print(f"   Response preview: {str(response_data)[:200]}...")
+            print("="*80 + "\n")
+            
             return response_data["choices"][0]["message"]["content"]
             
         except Exception as e:
+            print(f"\n❌ EXCEPTION in LLM.complete():")
+            print(f"   Exception Type: {type(e).__name__}")
+            print(f"   Exception Message: {str(e)}")
+            import traceback
+            print(f"   Traceback:")
+            print(traceback.format_exc())
+            print("="*80 + "\n")
             raise Exception(f"LLM completion failed: {str(e)}")
 
 
@@ -462,7 +506,7 @@ def call_asi_one_api(prompt: str) -> str:
             f"{ASI_BASE_URL}/chat/completions",
             headers=ASI_HEADERS,
             json=payload,
-            timeout=30
+            timeout=3000
         )
         
         if response.status_code != 200:
@@ -751,6 +795,23 @@ async def handle_generate_personality_message(ctx: Context, req: PersonalityMess
         previous_messages = req.previous_messages
         is_initial = req.is_initial
         agent_description = req.agent_description
+        
+        # DETAILED REQUEST LOGGING
+        print("\n" + "="*80)
+        print("🎭 PERSONALITY MESSAGE GENERATION REQUEST")
+        print("="*80)
+        print(f"📝 Is Initial: {is_initial}")
+        print(f"👤 Personality Name: {personality.get('name', 'Unknown')}")
+        print(f"💬 Previous Messages Count: {len(previous_messages)}")
+        print(f"📋 Previous Messages:")
+        for i, msg in enumerate(previous_messages):
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            has_tx_analysis = 'transaction_analysis' in msg if isinstance(msg, dict) else False
+            print(f"   [{i}] {role}: {content[:100]}{'...' if len(content) > 100 else ''}")
+            if has_tx_analysis:
+                print(f"        ⚠️  Has transaction_analysis field")
+        print("="*80 + "\n")
         
         personality_name = personality.get("name", "")
         personality_trait = personality.get("personality", "")
