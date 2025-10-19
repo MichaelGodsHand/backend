@@ -636,6 +636,10 @@ AGENTVERSE_API_KEY = os.environ.get("AGENTVERSE_API_KEY")
 BLOCKSCOUT_AGENT_URL = "https://blockscoutagent-739298578243.us-central1.run.app"
 BLOCKSCOUT_AGENT_ADDRESS = "agent1q2qnrd7y6caqqj88gzdm82mt589jx3ttew8hemhjdg9jqdy092zh7xgr4v9"  # A2A address if needed
 
+# Metrics Generator Agent configuration
+METRICS_GENERATOR_URL = "https://metricsgen-739298578243.us-central1.run.app"
+METRICS_GENERATOR_ADDRESS = "agent1qvx8fqtw9jp48pl3c22h7dzgeu78ksp3vnuk748lep3m6hjc3tt3g0wdfya"  # A2A address if needed
+
 # Store transaction analyses for SDK retrieval
 transaction_analyses = {}
 
@@ -1505,6 +1509,7 @@ async def startup_handler(ctx: Context):
     ctx.logger.info("📊 Powered by ASI:One AI reasoning")
     ctx.logger.info("🤝 A2A Communication with BlockscoutAgent enabled")
     ctx.logger.info(f"🌐 BlockScoutAgent URL: {BLOCKSCOUT_AGENT_URL}")
+    ctx.logger.info(f"📊 Metrics Generator URL: {METRICS_GENERATOR_URL}")
     ctx.logger.info("🗄️ Knowledge Graph enabled for conversation storage")
     if AGENTVERSE_API_KEY:
         ctx.logger.info(f"✅ Registered on Agentverse with mailbox: {AGENTVERSE_API_KEY[:8]}...")
@@ -1529,6 +1534,7 @@ if __name__ == "__main__":
     print("🤖 uAgents Framework: ENABLED")
     print("🤝 A2A Communication with BlockscoutAgent: ENABLED")
     print(f"🌐 BlockScoutAgent URL: {BLOCKSCOUT_AGENT_URL}")
+    print(f"📊 Metrics Generator URL: {METRICS_GENERATOR_URL}")
     print("🗄️ Knowledge Graph (MeTTa): ENABLED")
     
     if AGENTVERSE_API_KEY:
@@ -1542,6 +1548,7 @@ if __name__ == "__main__":
     print("  - Stores BlockScout transaction analyses linked to conversations")
     print("  - Query by conversation ID, personality, or get all data")
     print("  - Maintains relationships between conversations and transactions")
+    print("  - Generates comprehensive performance metrics via Metrics Generator")
     
     print("\n🌐 Starting uAgent with REST endpoints...")
     print("🎯 Focus: Testing DeFi capabilities on Base Sepolia with existing funds!")
