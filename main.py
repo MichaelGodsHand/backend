@@ -1202,6 +1202,161 @@ async def handle_kg_all_transactions(ctx: Context) -> KGAllTransactionsResponse:
         )
 
 
+# New endpoint for getting the last inserted entry
+class KGLastEntryResponse(Model):
+    """Response with the last inserted entry from KG"""
+    success: bool
+    entry_type: str  # "conversation" or "transaction"
+    entry: Optional[Dict[str, Any]] = None
+    timestamp: Optional[str] = None
+    message: str
+
+
+@agent.on_rest_get("/rest/kg/last-entry", KGLastEntryResponse)
+async def handle_kg_last_entry(ctx: Context) -> KGLastEntryResponse:
+    """Get the last inserted entry from the Knowledge Graph with complete transaction analysis data"""
+    ctx.logger.info("KG Query: Retrieving last inserted entry with transaction analysis")
+    
+    try:
+        # Get all conversations and transactions, then find the most recent
+        conversations = conversation_kg.get_all_conversations()
+        transactions = conversation_kg.get_all_transactions()
+        
+        # Find the most recent entry by timestamp
+        last_conversation = None
+        last_transaction = None
+        
+        if conversations:
+            # Sort conversations by timestamp (assuming they have timestamp field)
+            conversations_with_timestamps = []
+            for conv in conversations:
+                if 'timestamp' in conv:
+                    conversations_with_timestamps.append(conv)
+            
+            if conversations_with_timestamps:
+                last_conversation = max(conversations_with_timestamps, 
+                                     key=lambda x: x.get('timestamp', ''))
+        
+        if transactions:
+            # Sort transactions by timestamp
+            transactions_with_timestamps = []
+            for tx in transactions:
+                if 'timestamp' in tx:
+                    transactions_with_timestamps.append(tx)
+            
+            if transactions_with_timestamps:
+                last_transaction = max(transactions_with_timestamps, 
+                                    key=lambda x: x.get('timestamp', ''))
+        
+        # Determine which is more recent and enhance the response
+        if last_conversation and last_transaction:
+            conv_time = last_conversation.get('timestamp', '')
+            tx_time = last_transaction.get('timestamp', '')
+            
+            if conv_time > tx_time:
+                # Last entry is a conversation - enhance it with transaction data
+                enhanced_conversation = enhance_conversation_with_transactions(last_conversation, transactions)
+                return KGLastEntryResponse(
+                    success=True,
+                    entry_type="conversation",
+                    entry=enhanced_conversation,
+                    timestamp=conv_time,
+                    message="Last inserted entry is a conversation with transaction analysis"
+                )
+            else:
+                # Last entry is a transaction - return it as is
+                return KGLastEntryResponse(
+                    success=True,
+                    entry_type="transaction",
+                    entry=last_transaction,
+                    timestamp=tx_time,
+                    message="Last inserted entry is a transaction analysis"
+                )
+        elif last_conversation:
+            # Only conversations exist - enhance with transaction data
+            enhanced_conversation = enhance_conversation_with_transactions(last_conversation, transactions)
+            return KGLastEntryResponse(
+                success=True,
+                entry_type="conversation",
+                entry=enhanced_conversation,
+                timestamp=last_conversation.get('timestamp', ''),
+                message="Last inserted entry is a conversation with transaction analysis"
+            )
+        elif last_transaction:
+            # Only transactions exist
+            return KGLastEntryResponse(
+                success=True,
+                entry_type="transaction",
+                entry=last_transaction,
+                timestamp=last_transaction.get('timestamp', ''),
+                message="Last inserted entry is a transaction analysis"
+            )
+        else:
+            return KGLastEntryResponse(
+                success=False,
+                entry_type="none",
+                entry=None,
+                timestamp=None,
+                message="No entries found in Knowledge Graph"
+            )
+    
+    except Exception as e:
+        ctx.logger.error(f"Failed to get last entry: {str(e)}")
+        return KGLastEntryResponse(
+            success=False,
+            entry_type="error",
+            entry=None,
+            timestamp=None,
+            message=f"Error retrieving last entry: {str(e)}"
+        )
+
+
+def enhance_conversation_with_transactions(conversation: Dict[str, Any], all_transactions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Enhance a conversation with complete transaction analysis data"""
+    enhanced_conv = conversation.copy()
+    
+    # Get existing transactions from conversation
+    existing_transactions = conversation.get('transactions', [])
+    
+    # Enhance each transaction with complete analysis data
+    enhanced_transactions = []
+    for tx in existing_transactions:
+        tx_hash = tx.get('transaction_hash', '')
+        if tx_hash:
+            # Find the complete transaction data from all_transactions
+            complete_tx_data = None
+            for full_tx in all_transactions:
+                if full_tx.get('transaction_hash', '').lower() == tx_hash.lower():
+                    complete_tx_data = full_tx
+                    break
+            
+            if complete_tx_data:
+                # Create enhanced transaction entry with all data
+                enhanced_tx = {
+                    "transaction_hash": complete_tx_data.get('transaction_hash', tx_hash),
+                    "chain_id": complete_tx_data.get('chain_id', '84532'),  # Default to Base Sepolia
+                    "analysis": complete_tx_data.get('analysis', ''),
+                    "timestamp": complete_tx_data.get('timestamp', ''),
+                    "success": complete_tx_data.get('success', True)
+                }
+                enhanced_transactions.append(enhanced_tx)
+            else:
+                # Keep original transaction data if no complete data found
+                enhanced_tx = {
+                    "transaction_hash": tx_hash,
+                    "chain_id": tx.get('chain_id', '84532'),
+                    "analysis": tx.get('analysis', 'No analysis available'),
+                    "timestamp": tx.get('timestamp', ''),
+                    "success": tx.get('success', False)
+                }
+                enhanced_transactions.append(enhanced_tx)
+    
+    # Update the conversation with enhanced transactions
+    enhanced_conv['transactions'] = enhanced_transactions
+    
+    return enhanced_conv
+
+
 @agent.on_event("startup")
 async def startup_handler(ctx: Context):
     ctx.logger.info(f"CDP Agent Tester Backend started with address: {ctx.agent.address}")
@@ -1222,6 +1377,7 @@ async def startup_handler(ctx: Context):
     ctx.logger.info("  - POST /rest/kg/query-by-personality")
     ctx.logger.info("  - GET  /rest/kg/all-conversations")
     ctx.logger.info("  - GET  /rest/kg/all-transactions")
+    ctx.logger.info("  - GET  /rest/kg/last-entry")
     ctx.logger.info("🎯 Focus: Testing DeFi capabilities on Base Sepolia with existing funds!")
 
 
