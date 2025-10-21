@@ -634,6 +634,27 @@ async def get_transaction_analysis_from_blockscout(tx_hash: str) -> Optional[Dic
         return None
 
 
+async def get_transaction_raw_data_from_blockscout(tx_hash: str) -> Optional[Dict[str, Any]]:
+    """Get raw transaction data from BlockScout MCP via BlockscoutAgent."""
+    import httpx
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Call the test-blockscout endpoint to get raw data
+            response = await client.post(
+                f"{BLOCKSCOUT_AGENT_URL}/rest/test-blockscout",
+                json={"tx_hash": tx_hash, "chain_id": "84532", "include_logs": True, "include_traces": False}
+            )
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success") and result.get("data"):
+                    return result["data"]
+            return None
+    except Exception as e:
+        print(f"Error getting raw data from BlockscoutAgent: {e}")
+        return None
+
+
 def generate_fallback_personalities() -> List[Dict[str, str]]:
     """Generate fallback personalities that test DeFi capabilities using existing Base Sepolia funds - EXACTLY 1 tool call per personality"""
     return [
@@ -714,7 +735,7 @@ agent = Agent(
     port=8080,
     seed="cdp agent tester backend seed phrase",
     mailbox=f"{AGENTVERSE_API_KEY}" if AGENTVERSE_API_KEY else None,
-    endpoint=["http://localhost:8080/submit"]
+    endpoint=["https://backend-739298578243.us-central1.run.app/submit"]
 )
 
 
@@ -1047,11 +1068,16 @@ Return ONLY the JSON. No markdown, no explanations."""
 async def handle_transaction_analysis_response(ctx: Context, sender: str, msg: TransactionAnalysisResponse):
     """Handle transaction analysis response from BlockscoutAgent."""
     ctx.logger.info(f"[A2A] Received transaction analysis from BlockscoutAgent for tx: {msg.transaction_hash}")
+    ctx.logger.info(f"[A2A] Sender: {sender}")
     ctx.logger.info(f"[A2A] Conversation ID: {msg.conversation_id}")
     ctx.logger.info(f"[A2A] Timestamp: {msg.timestamp}")
     ctx.logger.info(f"[A2A] Success: {msg.success}")
     ctx.logger.info(f"[A2A] Analysis length: {len(msg.analysis)}")
     ctx.logger.info(f"[A2A] Analysis preview: {msg.analysis[:200]}...")
+    ctx.logger.info(f"[A2A] Raw data available: {msg.raw_data is not None}")
+    if msg.raw_data:
+        ctx.logger.info(f"[A2A] Raw data keys: {list(msg.raw_data.keys()) if isinstance(msg.raw_data, dict) else 'Not a dict'}")
+        ctx.logger.info(f"[A2A] Raw data preview: {str(msg.raw_data)[:200]}...")
     
     # Store the analysis for SDK retrieval
     transaction_analyses[msg.transaction_hash] = {
@@ -1441,6 +1467,74 @@ class KGLastEntryResponse(Model):
     message: str
 
 
+# New endpoint to fetch and store raw data for existing transactions
+class FetchRawDataRequest(Model):
+    """Request to fetch raw data for a transaction"""
+    transaction_hash: str
+    chain_id: str = "84532"
+
+
+class FetchRawDataResponse(Model):
+    """Response for raw data fetch"""
+    success: bool
+    message: str
+    raw_data: Optional[Dict[str, Any]] = None
+
+
+@agent.on_rest_post("/rest/fetch-raw-data", FetchRawDataRequest, FetchRawDataResponse)
+async def handle_fetch_raw_data(ctx: Context, req: FetchRawDataRequest) -> FetchRawDataResponse:
+    """Fetch raw transaction data and store it in Knowledge Graph"""
+    ctx.logger.info(f"Received request to fetch raw data for tx: {req.transaction_hash}")
+    
+    try:
+        # Fetch raw data from BlockScoutAgent
+        raw_data = await get_transaction_raw_data_from_blockscout(req.transaction_hash)
+        
+        if raw_data:
+            ctx.logger.info(f"Successfully fetched raw data for tx: {req.transaction_hash}")
+            ctx.logger.info(f"Raw data keys: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'Not a dict'}")
+            
+            # Store in Knowledge Graph
+            try:
+                kg_result = conversation_kg.add_blockscout_analysis(
+                    transaction_hash=req.transaction_hash,
+                    conversation_id="manual_fetch",  # Use a placeholder conversation ID
+                    analysis="Raw data fetched manually",
+                    timestamp=datetime.utcnow().isoformat(),
+                    chain_id=req.chain_id,
+                    raw_data=raw_data
+                )
+                ctx.logger.info(f"Stored raw data in KG: {kg_result}")
+                
+                return FetchRawDataResponse(
+                    success=True,
+                    message=f"Successfully fetched and stored raw data for transaction {req.transaction_hash}",
+                    raw_data=raw_data
+                )
+            except Exception as kg_error:
+                ctx.logger.error(f"Failed to store raw data in KG: {kg_error}")
+                return FetchRawDataResponse(
+                    success=False,
+                    message=f"Fetched raw data but failed to store: {str(kg_error)}",
+                    raw_data=raw_data
+                )
+        else:
+            ctx.logger.warning(f"No raw data found for transaction: {req.transaction_hash}")
+            return FetchRawDataResponse(
+                success=False,
+                message=f"No raw data found for transaction {req.transaction_hash}",
+                raw_data=None
+            )
+        
+    except Exception as e:
+        ctx.logger.error(f"Failed to fetch raw data: {str(e)}")
+        return FetchRawDataResponse(
+            success=False,
+            message=f"Failed to fetch raw data: {str(e)}",
+            raw_data=None
+        )
+
+
 @agent.on_rest_get("/rest/kg/last-entry", KGLastEntryResponse)
 async def handle_kg_last_entry(ctx: Context) -> KGLastEntryResponse:
     """Get the last inserted entry from the Knowledge Graph with complete transaction analysis data"""
@@ -1632,6 +1726,7 @@ async def startup_handler(ctx: Context):
     ctx.logger.info("  - GET  /rest/kg/all-conversations")
     ctx.logger.info("  - GET  /rest/kg/all-transactions")
     ctx.logger.info("  - GET  /rest/kg/last-entry")
+    ctx.logger.info("  - POST /rest/fetch-raw-data")
     ctx.logger.info("🎯 Focus: Testing DeFi capabilities on Base Sepolia with existing funds!")
 
 
