@@ -80,7 +80,7 @@ class ConversationKnowledgeGraph:
         return f"Successfully added conversation: {conversation_id}"
     
     def add_blockscout_analysis(self, transaction_hash: str, conversation_id: str, 
-                               analysis: str, timestamp: str, chain_id: str = ""):
+                               analysis: str, timestamp: str, chain_id: str = "", raw_data: Optional[Dict[str, Any]] = None):
         """Add BlockScout analysis linked to a conversation."""
         print(f"[KG] add_blockscout_analysis called with:")
         print(f"[KG]   - transaction_hash: {transaction_hash}")
@@ -115,12 +115,19 @@ class ConversationKnowledgeGraph:
             "chain_id": chain_id,
             "analysis": analysis,
             "timestamp": timestamp,
-            "success": True
+            "success": True,
+            "raw_data": raw_data
         }
         tx_data_json = json.dumps(tx_data)
         self.metta.space().add_atom(E(S("conversation_tx_data"), S(conv_id), ValueAtom(tx_data_json)))
         print(f"[KG] Stored direct tx_data for conversation: {conv_id}")
         print(f"[KG] Transaction data stored successfully")
+        
+        # Store raw data separately for easier access
+        if raw_data:
+            raw_data_json = json.dumps(raw_data)
+            self.metta.space().add_atom(E(S("transaction_raw_data"), S(tx_id), ValueAtom(raw_data_json)))
+            print(f"[KG] Stored raw transaction data for tx: {tx_id}")
         
         return f"Successfully added BlockScout analysis for transaction: {transaction_hash}"
     
@@ -251,6 +258,13 @@ class ConversationKnowledgeGraph:
         chain_results = self.metta.run(query_str)
         if chain_results and chain_results[0]:
             result['chain_id'] = chain_results[0][0].get_object().value
+        
+        # Get raw data
+        query_str = f'!(match &self (transaction_raw_data {tx_id} $raw_data) $raw_data)'
+        raw_data_results = self.metta.run(query_str)
+        if raw_data_results and raw_data_results[0]:
+            raw_data_json = raw_data_results[0][0].get_object().value
+            result['raw_data'] = json.loads(raw_data_json)
         
         return result
     
@@ -489,6 +503,7 @@ class TransactionAnalysisResponse(Model):
     conversation_id: str
     transaction_hash: str
     analysis: str
+    raw_data: Optional[Dict[str, Any]] = None
     timestamp: str
 
 
@@ -1042,13 +1057,17 @@ async def handle_transaction_analysis_response(ctx: Context, sender: str, msg: T
     try:
         ctx.logger.info(f"[A2A] Attempting to store in Knowledge Graph...")
         ctx.logger.info(f"[A2A] KG params: tx_hash={msg.transaction_hash}, conv_id={msg.conversation_id}")
+        ctx.logger.info(f"[A2A] Raw data available: {msg.raw_data is not None}")
+        if msg.raw_data:
+            ctx.logger.info(f"[A2A] Raw data keys: {list(msg.raw_data.keys()) if isinstance(msg.raw_data, dict) else 'Not a dict'}")
         
         kg_result = conversation_kg.add_blockscout_analysis(
             transaction_hash=msg.transaction_hash,
             conversation_id=msg.conversation_id,
             analysis=msg.analysis,
             timestamp=msg.timestamp,
-            chain_id="84532"  # Default to Base Sepolia
+            chain_id="84532",  # Default to Base Sepolia
+            raw_data=msg.raw_data
         )
         ctx.logger.info(f"[A2A] Knowledge Graph BlockScout storage result: {kg_result}")
         ctx.logger.info(f"[A2A] Successfully stored transaction analysis in KG")
@@ -1083,6 +1102,7 @@ async def handle_store_conversation(ctx: Context, req: ConversationStorageReques
                     "chain_id": tx_analysis.get('chain', '84532'),
                     "analysis": tx_analysis.get('analysis', ''),
                     "timestamp": tx_analysis.get('timestamp', ''),
+                    "raw_data": tx_analysis.get('raw_data'),
                     "success": True
                 })
         
@@ -1120,7 +1140,8 @@ async def handle_store_conversation(ctx: Context, req: ConversationStorageReques
                     conversation_id=req.conversation_id,
                     analysis=tx_data['analysis'],
                     timestamp=tx_data['timestamp'],
-                    chain_id=tx_data['chain_id']
+                    chain_id=tx_data['chain_id'],
+                    raw_data=tx_data.get('raw_data')
                 )
                 ctx.logger.info(f"[STORE-CONV] KG transaction storage: {tx_kg_result}")
                 
@@ -1530,6 +1551,7 @@ def enhance_conversation_with_transactions(conversation: Dict[str, Any], all_tra
                 "chain_id": tx.get('chain_id', '84532'),
                 "analysis": tx.get('analysis', ''),
                 "timestamp": tx.get('timestamp', ''),
+                "raw_data": tx.get('raw_data'),
                 "success": tx.get('success', True)
             }
             enhanced_transactions.append(enhanced_tx)
@@ -1555,6 +1577,7 @@ def enhance_conversation_with_transactions(conversation: Dict[str, Any], all_tra
                     "chain_id": complete_tx_data.get('chain_id', '84532'),  # Default to Base Sepolia
                     "analysis": complete_tx_data.get('analysis', ''),
                     "timestamp": complete_tx_data.get('timestamp', ''),
+                    "raw_data": complete_tx_data.get('raw_data'),
                     "success": complete_tx_data.get('success', True)
                 }
                 enhanced_transactions.append(enhanced_tx)
@@ -1565,6 +1588,7 @@ def enhance_conversation_with_transactions(conversation: Dict[str, Any], all_tra
                     "chain_id": tx.get('chain_id', '84532'),
                     "analysis": tx.get('analysis', 'No analysis available'),
                     "timestamp": tx.get('timestamp', ''),
+                    "raw_data": tx.get('raw_data'),
                     "success": tx.get('success', False)
                 }
                 enhanced_transactions.append(enhanced_tx)
