@@ -655,6 +655,56 @@ async def get_transaction_raw_data_from_blockscout(tx_hash: str) -> Optional[Dic
         return None
 
 
+async def auto_fetch_missing_raw_data(ctx: Context, transactions: List[Dict[str, Any]]):
+    """Automatically fetch raw data for transactions that don't have it"""
+    ctx.logger.info("[AUTO-FETCH] Starting auto-fetch for missing raw data")
+    
+    missing_raw_data_txs = []
+    for tx in transactions:
+        tx_hash = tx.get('transaction_hash', '')
+        if tx_hash and not tx.get('raw_data'):
+            missing_raw_data_txs.append(tx_hash)
+            ctx.logger.info(f"[AUTO-FETCH] Transaction {tx_hash} missing raw data")
+    
+    if not missing_raw_data_txs:
+        ctx.logger.info("[AUTO-FETCH] No transactions missing raw data")
+        return
+    
+    ctx.logger.info(f"[AUTO-FETCH] Found {len(missing_raw_data_txs)} transactions missing raw data")
+    
+    # Fetch raw data for each missing transaction
+    for tx_hash in missing_raw_data_txs:
+        try:
+            ctx.logger.info(f"[AUTO-FETCH] Fetching raw data for {tx_hash}")
+            
+            # Fetch raw data from BlockScoutAgent
+            raw_data = await get_transaction_raw_data_from_blockscout(tx_hash)
+            
+            if raw_data:
+                ctx.logger.info(f"[AUTO-FETCH] Successfully fetched raw data for {tx_hash}")
+                
+                # Store in Knowledge Graph
+                try:
+                    kg_result = conversation_kg.add_blockscout_analysis(
+                        transaction_hash=tx_hash,
+                        conversation_id="auto_fetch",  # Use a placeholder conversation ID
+                        analysis="Raw data auto-fetched",
+                        timestamp=datetime.utcnow().isoformat(),
+                        chain_id="84532",
+                        raw_data=raw_data
+                    )
+                    ctx.logger.info(f"[AUTO-FETCH] Stored raw data in KG for {tx_hash}: {kg_result}")
+                except Exception as kg_error:
+                    ctx.logger.error(f"[AUTO-FETCH] Failed to store raw data in KG for {tx_hash}: {kg_error}")
+            else:
+                ctx.logger.warning(f"[AUTO-FETCH] No raw data found for {tx_hash}")
+                
+        except Exception as e:
+            ctx.logger.error(f"[AUTO-FETCH] Error fetching raw data for {tx_hash}: {e}")
+    
+    ctx.logger.info("[AUTO-FETCH] Auto-fetch completed")
+
+
 def generate_fallback_personalities() -> List[Dict[str, str]]:
     """Generate fallback personalities that test DeFi capabilities using existing Base Sepolia funds - EXACTLY 1 tool call per personality"""
     return [
@@ -1554,6 +1604,13 @@ async def handle_kg_last_entry(ctx: Context) -> KGLastEntryResponse:
         for i, tx in enumerate(transactions):
             ctx.logger.info(f"[LAST-ENTRY] Transaction {i}: {tx.get('transaction_hash', 'unknown')} - raw_data: {tx.get('raw_data') is not None}")
         
+        # Auto-fetch raw data for transactions that don't have it
+        await auto_fetch_missing_raw_data(ctx, transactions)
+        
+        # Re-fetch transactions after auto-fetching raw data
+        transactions = conversation_kg.get_all_transactions()
+        ctx.logger.info(f"[LAST-ENTRY] After auto-fetch, found {len(transactions)} transactions")
+        
         # Find the most recent entry by timestamp
         last_conversation = None
         last_transaction = None
@@ -1750,6 +1807,7 @@ async def startup_handler(ctx: Context):
     ctx.logger.info("  - GET  /rest/kg/all-transactions")
     ctx.logger.info("  - GET  /rest/kg/last-entry")
     ctx.logger.info("  - POST /rest/fetch-raw-data")
+    ctx.logger.info("🔄 Auto-fetch: /rest/kg/last-entry automatically fetches missing raw data")
     ctx.logger.info("🎯 Focus: Testing DeFi capabilities on Base Sepolia with existing funds!")
 
 
