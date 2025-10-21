@@ -538,14 +538,21 @@ def extract_transaction_from_message(message: str) -> Optional[Dict[str, str]]:
     """Extract transaction hash and chain info from a message."""
     import re
     
-    # Look for transaction hash pattern (0x followed by 64 hex characters)
-    tx_pattern = r'0x[a-fA-F0-9]{64}'
+    # Look for transaction hash pattern (0x followed by hex characters)
+    # Ethereum transaction hashes are typically 0x + 64 hex characters = 66 characters total
+    # But some systems might truncate or use different formats, so we'll be more flexible
+    tx_pattern = r'0x[a-fA-F0-9]{60,66}'
     tx_match = re.search(tx_pattern, message)
     
     if not tx_match:
         return None
     
     tx_hash = tx_match.group()
+    
+    # Debug logging
+    print(f"[TX-DETECT] Found transaction hash: {tx_hash}")
+    print(f"[TX-DETECT] Hash length: {len(tx_hash)}")
+    print(f"[TX-DETECT] Message context: {message[:200]}...")
     
     # Try to detect chain from context
     message_lower = message.lower()
@@ -922,9 +929,11 @@ Your response:"""
         message = message.split("\n")[0].strip()
         
         # Check if this message contains a transaction hash
+        ctx.logger.info(f"[TX-CHECK] Checking message for transaction hash: {message[:100]}...")
         tx_info = extract_transaction_from_message(message)
         if tx_info:
-            ctx.logger.info(f"Transaction detected in message: {tx_info['tx_hash']}")
+            ctx.logger.info(f"[TX-CHECK] Transaction detected in message: {tx_info['tx_hash']}")
+            ctx.logger.info(f"[TX-CHECK] Chain ID: {tx_info['chain_id']}")
             # Send transaction context to BlockscoutAgent asynchronously
             import asyncio
             asyncio.create_task(send_transaction_context_to_blockscout(
@@ -934,6 +943,8 @@ Your response:"""
                 previous_messages + [{"role": "user", "content": message}], 
                 tx_info
             ))
+        else:
+            ctx.logger.info(f"[TX-CHECK] No transaction hash detected in message")
         
         return PersonalityMessageResponse(message=message)
         
