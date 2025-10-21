@@ -1550,6 +1550,10 @@ async def handle_kg_last_entry(ctx: Context) -> KGLastEntryResponse:
         transactions = conversation_kg.get_all_transactions()
         ctx.logger.info(f"[LAST-ENTRY] Found {len(transactions)} transactions")
         
+        # Debug: Log transaction details
+        for i, tx in enumerate(transactions):
+            ctx.logger.info(f"[LAST-ENTRY] Transaction {i}: {tx.get('transaction_hash', 'unknown')} - raw_data: {tx.get('raw_data') is not None}")
+        
         # Find the most recent entry by timestamp
         last_conversation = None
         last_transaction = None
@@ -1645,18 +1649,37 @@ def enhance_conversation_with_transactions(conversation: Dict[str, Any], all_tra
     
     # Get existing transactions from conversation
     existing_transactions = conversation.get('transactions', [])
+    print(f"[ENHANCE] Enhancing conversation with {len(existing_transactions)} existing transactions")
+    print(f"[ENHANCE] Available all_transactions: {len(all_transactions)}")
     
-    # If transactions are already complete (have analysis), use them as-is
+    # If transactions are already complete (have analysis), enhance them with raw data from KG
     if existing_transactions and any(tx.get('analysis') for tx in existing_transactions):
-        # Transactions already have complete data, just ensure format is consistent
+        # Transactions already have complete data, but check for raw data in KG
         enhanced_transactions = []
         for tx in existing_transactions:
+            tx_hash = tx.get('transaction_hash', '')
+            
+            # Try to find raw data in the Knowledge Graph
+            raw_data = None
+            if tx_hash:
+                # Query the Knowledge Graph for raw data
+                try:
+                    tx_id = tx_hash.lower().replace("0x", "tx_")
+                    query_str = f'!(match &self (transaction_raw_data {tx_id} $raw_data) $raw_data)'
+                    raw_data_results = conversation_kg.metta.run(query_str)
+                    if raw_data_results and raw_data_results[0]:
+                        raw_data_json = raw_data_results[0][0].get_object().value
+                        raw_data = json.loads(raw_data_json)
+                        print(f"[ENHANCE] Found raw data for tx {tx_hash} in KG")
+                except Exception as e:
+                    print(f"[ENHANCE] Error fetching raw data for {tx_hash}: {e}")
+            
             enhanced_tx = {
                 "transaction_hash": tx.get('transaction_hash', ''),
                 "chain_id": tx.get('chain_id', '84532'),
                 "analysis": tx.get('analysis', ''),
                 "timestamp": tx.get('timestamp', ''),
-                "raw_data": tx.get('raw_data'),
+                "raw_data": raw_data or tx.get('raw_data'),  # Use KG data if available, fallback to existing
                 "success": tx.get('success', True)
             }
             enhanced_transactions.append(enhanced_tx)
