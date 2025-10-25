@@ -145,9 +145,15 @@ class ConversationKnowledgeGraph:
         
         # Store raw data separately for easier access
         if raw_data:
+            print(f"[KG] Raw data type: {type(raw_data)}")
+            print(f"[KG] Raw data keys: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'Not a dict'}")
+            print(f"[KG] ========== STORING RAW DATA IN KG ==========")
+            print(f"[KG] {json.dumps(raw_data, indent=2)}")
+            print(f"[KG] ========== END RAW DATA STORAGE ==========")
+            
             raw_data_json = json.dumps(raw_data)
             self.metta.space().add_atom(E(S("transaction_raw_data"), S(tx_id), ValueAtom(raw_data_json)))
-            print(f"[KG] Stored raw transaction data for tx: {tx_id}")
+            print(f"[KG] ✅ Stored raw transaction data for tx: {tx_id}")
         
         return f"Successfully added BlockScout analysis for transaction: {transaction_hash}"
     
@@ -762,7 +768,11 @@ async def get_transaction_raw_data_from_blockscout(tx_hash: str, chain_id: str =
                         print(f"[BLOCKSCOUT-AGENT] ✅ Raw transaction data found")
                         print(f"[BLOCKSCOUT-AGENT] Data type: {type(raw_data)}")
                         print(f"[BLOCKSCOUT-AGENT] Data keys: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'Not a dict'}")
-                        print(f"[BLOCKSCOUT-AGENT] Data preview: {str(raw_data)[:500]}...")
+                        
+                        # LOG THE COMPLETE RAW DATA
+                        print(f"[BLOCKSCOUT-AGENT] ========== COMPLETE RAW TRANSACTION DATA ==========")
+                        print(f"[BLOCKSCOUT-AGENT] {json.dumps(raw_data, indent=2)}")
+                        print(f"[BLOCKSCOUT-AGENT] ========== END RAW TRANSACTION DATA ==========")
                         
                         # Also check if there's an analysis
                         if result.get("analysis"):
@@ -833,6 +843,11 @@ async def auto_fetch_missing_raw_data(ctx: Context, transactions: List[Dict[str,
                     print(f"[AUTO-FETCH] Raw data type: {type(raw_data)}")
                     print(f"[AUTO-FETCH] Raw data keys: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'Not a dict'}")
                     
+                    # LOG THE COMPLETE RAW DATA IN AUTO-FETCH
+                    print(f"[AUTO-FETCH] ========== COMPLETE RAW DATA FOR {tx_hash} ==========")
+                    print(f"[AUTO-FETCH] {json.dumps(raw_data, indent=2)}")
+                    print(f"[AUTO-FETCH] ========== END RAW DATA ==========")
+                    
                     # Store raw data in the transaction
                     tx['raw_data'] = raw_data
                     print(f"[AUTO-FETCH] ✅ Stored raw_data in transaction object")
@@ -840,6 +855,11 @@ async def auto_fetch_missing_raw_data(ctx: Context, transactions: List[Dict[str,
                     # Store in Knowledge Graph
                     try:
                         print(f"[AUTO-FETCH] 🔄 Storing in Knowledge Graph...")
+                        print(f"[AUTO-FETCH] KG Storage - Transaction Hash: {tx_hash}")
+                        print(f"[AUTO-FETCH] KG Storage - Chain ID: {chain_id}")
+                        print(f"[AUTO-FETCH] KG Storage - Raw Data Type: {type(raw_data)}")
+                        print(f"[AUTO-FETCH] KG Storage - Raw Data Keys: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'Not a dict'}")
+                        
                         kg_result = conversation_kg.add_blockscout_analysis(
                             transaction_hash=tx_hash,
                             conversation_id="auto_fetch",  # Use a placeholder conversation ID
@@ -1957,7 +1977,11 @@ async def handle_test_blockscout_agent(ctx: Context, req: Model) -> Model:
             print(f"[TEST-BLOCKSCOUT] ✅ Successfully fetched raw data!")
             print(f"[TEST-BLOCKSCOUT] Raw data type: {type(raw_data)}")
             print(f"[TEST-BLOCKSCOUT] Raw data keys: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'Not a dict'}")
-            print(f"[TEST-BLOCKSCOUT] Raw data preview: {str(raw_data)[:500]}...")
+            
+            # LOG THE COMPLETE RAW DATA IN TEST
+            print(f"[TEST-BLOCKSCOUT] ========== COMPLETE RAW DATA ==========")
+            print(f"[TEST-BLOCKSCOUT] {json.dumps(raw_data, indent=2)}")
+            print(f"[TEST-BLOCKSCOUT] ========== END RAW DATA ==========")
             
             return Model(
                 success=True,
